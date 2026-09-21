@@ -69,7 +69,7 @@ def _data_dir() -> str:
 
 @register("astrbot_plugin_cross_plague", "Zxin_Pro",
           "跨群瘟疫模拟游戏：感染随群友跨群发言传播，群友合作研发解药",
-          "v1.0.2",
+          "v1.0.3",
           "https://github.com/Zxin-Pro/astrbot_plugin_cross_plague")
 class CrossPlaguePlugin(Star):
     def __init__(self, context: Any, config: Any = None):
@@ -120,7 +120,7 @@ class CrossPlaguePlugin(Star):
         await self.core.load()
         self._running = True
         self._sched_task = asyncio.create_task(self._scheduler_loop())
-        logger.info("[cross_plague] 插件加载完成 v1.0.0")
+        logger.info("[cross_plague] 插件加载完成 v1.0.3")
 
     async def terminate(self):
         self._running = False
@@ -439,7 +439,7 @@ class CrossPlaguePlugin(Star):
             text += "⚠️ 本群已退出瘟疫模拟\n"
         contribs = data.get("contributors", [])
         if contribs:
-            text += "—— 解药贡献 Top5 ——\n"
+            text += "—— 解药贡献榜前五 ——\n"
             for i, c in enumerate(contribs):
                 uid = str(c.get("user_id", "?"))
                 masked = uid[:3] + "****" + uid[-2:] if len(uid) > 6 else uid
@@ -568,7 +568,7 @@ class CrossPlaguePlugin(Star):
         else:
             text += "当前无感染群\n"
 
-        text += "\n—— 🧪 解药贡献 Top10 ——\n"
+        text += "\n—— 🧪 解药贡献榜前十 ——\n"
         tc = data.get("top_contributors", [])
         if tc:
             for i, r in enumerate(tc[:10]):

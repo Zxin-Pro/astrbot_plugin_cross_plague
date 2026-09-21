@@ -258,7 +258,7 @@ def build_card_tmpldata(data: dict, date_str: str) -> dict:
     else:
         ev2.append("暂无贡献，快用 /瘟疫研发 投入解药研究！")
     cards.append({
-        "name": "解药贡献榜", "count": "Top5", "cls": "cured", "events": ev2,
+        "name": "解药贡献榜", "count": "前五名", "cls": "cured", "events": ev2,
     })
     return {
         "title": "本群疫情卡片",

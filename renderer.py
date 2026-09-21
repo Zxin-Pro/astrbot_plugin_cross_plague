@@ -147,7 +147,7 @@ def render_map(data: Dict[str, Any]) -> Optional[bytes]:
         # 顶部
         d.text((40, 30), f"瘟疫第 {data.get('day_count', 0)} 天",
                font=_font(52), fill=GOLD)
-        d.text((40, 104), "全服疫情地图 · Cross Plague",
+        d.text((40, 104), "全服疫情地图",
                font=_font(28), fill=TXT_SUB)
         c = data.get("counts", {})
         stats_line = (f"感染 {c.get('infected', 0) + c.get('severe', 0)} · "
@@ -255,8 +255,8 @@ def render_card(data: Dict[str, Any]) -> Optional[bytes]:
         meta = f"感染时长：{_fmt_duration(days * 86400) if days is not None else '未感染'}"
         d.text((70, 420), meta, font=_font(26), fill=TXT_SUB)
 
-        # 贡献者 Top5
-        d.text((70, 470), "解药贡献榜 Top5", font=_font(30), fill=GOLD)
+        # 贡献者前五名
+        d.text((70, 470), "解药贡献榜前五", font=_font(30), fill=GOLD)
         d.line([(70, 516), (W - 70, 516)], fill=BORDER, width=1)
         contributors = data.get("contributors", [])
         f_c = _font(26)
