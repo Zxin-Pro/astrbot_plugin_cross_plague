@@ -53,6 +53,12 @@ from .database import Database
 from .fetcher import TextGen
 from .plague import PlagueCore, _day_start, _hm_to_seconds, _today_str
 from .renderer import render_card, render_map
+from .t2i_template import (
+    ZHUXI_PLAGUE_T2I_TEMPLATE,
+    build_card_tmpldata,
+    build_world_tmpldata,
+    render_t2i_direct,
+)
 
 
 def _data_dir() -> str:
@@ -63,7 +69,7 @@ def _data_dir() -> str:
 
 @register("astrbot_plugin_cross_plague", "Zxin_Pro",
           "跨群瘟疫模拟游戏：感染随群友跨群发言传播，群友合作研发解药",
-          "v1.0.0",
+          "v1.0.1",
           "https://github.com/Zxin-Pro/astrbot_plugin_cross_plague")
 class CrossPlaguePlugin(Star):
     def __init__(self, context: Any, config: Any = None):
@@ -410,7 +416,9 @@ class CrossPlaguePlugin(Star):
             "quarantined": data.get("quarantined"), "immune": data.get("immune"),
             "contributors": contribs,
         }
-        png = render_card(card)
+        png = await self._render_t2i_or_pillow(
+            build_card_tmpldata(data, self._now_str()),
+            lambda: render_card(card))
         yield self._image_or_text(event, png, text)
         self._stop(event)
 
@@ -441,9 +449,30 @@ class CrossPlaguePlugin(Star):
                 for gid, g in list(self.core._groups.items())[:32]
             ],
         }
-        png = render_map(map_data)
+        png = await self._render_t2i_or_pillow(
+            build_world_tmpldata(data, self._now_str()), lambda: render_map(map_data))
         yield self._image_or_text(event, png, text)
         self._stop(event)
+
+    @staticmethod
+    def _now_str() -> str:
+        try:
+            from zoneinfo import ZoneInfo
+            return datetime.now(ZoneInfo("Asia/Shanghai")).strftime("%m月%d日 %H:%M")
+        except Exception:
+            return datetime.now().strftime("%m月%d日 %H:%M")
+
+    async def _render_t2i_or_pillow(self, tmpldata: dict, pillow_fn):
+        """渲染链：烛之瘟疫 t2i 模板（主）→ 本地 Pillow（兜底）→ None（文本）"""
+        try:
+            return await render_t2i_direct(ZHUXI_PLAGUE_T2I_TEMPLATE, tmpldata)
+        except Exception as e:
+            logger.warning(f"[cross_plague] 烛之瘟疫 t2i 渲染失败，改用本地 Pillow: {e}")
+        try:
+            return pillow_fn()
+        except Exception as e:
+            logger.warning(f"[cross_plague] 本地 Pillow 渲染也失败: {e}")
+            return None
 
     # ================= 指令：瘟疫研发 =================
 

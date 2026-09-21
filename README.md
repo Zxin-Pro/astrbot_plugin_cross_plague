@@ -57,5 +57,5 @@ git clone https://github.com/Zxin-Pro/astrbot_plugin_cross_plague addons/plugins
 
 - 🌍 疫情全靠"人传人"：只有真实的跨群活跃才会扩散
 - 🛡️ 防作弊 / 防刷屏 / 死群保护（7 天无发言不参与传播）齐备
-- 📊 疫情地图 + 疫情卡片双渲染，失败自动降级文本
+- 📊 烛之瘟疫 t2i 模板渲染（t2i 服务直连）→ 本地 Pillow → 纯文本三级降级
 - 🔒 所有数据库操作参数化查询，动态字段走白名单

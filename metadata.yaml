@@ -1,5 +1,5 @@
 name: astrbot_plugin_cross_plague
 desc: 跨群瘟疫模拟游戏——感染通过群友的跨群发言在不同群之间传播，群友合作研发解药、对抗随机突变事件。本插件会记录群消息的群号/用户ID/发言时间戳，用于模拟跨群传播，不记录消息内容。
-version: v1.0.0
+version: v1.0.1
 author: Zxin_Pro
 repo: https://github.com/Zxin-Pro/astrbot_plugin_cross_plague
