@@ -50,17 +50,20 @@ class PlagueCore:
     """瘟疫核心逻辑。群状态内存缓存 + 异步落库；传播判定带用户级冷却。"""
 
     def __init__(self, db, cfg: Dict[str, Any], textgen,
-                 send_text: Callable[[str, str], Awaitable[None]]):
+                 send_text: Callable[[str, str], Awaitable[None]],
+                 fetch_name: Optional[Callable[[str], Awaitable[str]]] = None):
         """
         :param db: database.Database
         :param cfg: 配置 dict（_conf_schema 注入）
         :param textgen: fetcher.TextGen
         :param send_text: async (group_id, text) -> None  群消息发送回调
+        :param fetch_name: async (group_id) -> str  群名获取回调（平台 API 兜底）
         """
         self.db = db
         self.cfg = cfg
         self.textgen = textgen
         self._send_text = send_text
+        self._fetch_name = fetch_name
 
         # 内存缓存
         self._groups: Dict[str, Dict[str, Any]] = {}      # group_id -> group row
@@ -68,6 +71,7 @@ class PlagueCore:
         self._speak_dirty = False
         self._spread_check_at: Dict[str, int] = {}        # user_id -> 上次传播判定时间
         self._notify_count: Dict[Tuple[str, str], int] = {}  # (group_id, ymd) -> 已发通知数
+        self._name_resolving: set = set()                 # 正在补拉群名的群
         self._state: Dict[str, Any] = {}
 
         self._lock = asyncio.Lock()   # 传播/痊愈/重置等关键段串行化
@@ -91,11 +95,11 @@ class PlagueCore:
         return int(time.time())
 
     def _g(self, group_id: str, group_name: str = "") -> Dict[str, Any]:
-        """取群缓存，不存在则建（内存 + 异步落库）"""
+        """取群缓存，不存在则建（内存 + 异步落库）；群名缺失时异步补拉"""
         g = self._groups.get(group_id)
         if g is None:
             g = {
-                "group_id": group_id, "group_name": group_name or group_id,
+                "group_id": group_id, "group_name": group_name or "未知群",
                 "status": "healthy", "health": 100, "infected_at": None,
                 "cured_at": None, "antidote_progress": 0, "last_spread_at": None,
                 "is_false_alarm": 0, "false_alarm_at": None,
@@ -104,10 +108,37 @@ class PlagueCore:
             }
             self._groups[group_id] = g
             asyncio.create_task(self._safe_ensure_group(group_id, g["group_name"]))
+            if not group_name:
+                self._resolve_name_later(group_id)
         elif group_name and g.get("group_name") != group_name:
             g["group_name"] = group_name
             asyncio.create_task(self._safe_update_group(group_id, group_name=group_name))
+        elif (not group_name and g.get("group_name") in ("", None, "未知群")
+              and group_id not in self._name_resolving):
+            self._resolve_name_later(group_id)
         return g
+
+    def _resolve_name_later(self, group_id: str) -> None:
+        """群名缺失：异步调平台 API 补拉，补到后写缓存 + 落库"""
+        if group_id in self._name_resolving:
+            return
+        if self._fetch_name is None:
+            return
+        self._name_resolving.add(group_id)
+
+        async def _job():
+            try:
+                name = await self._fetch_name(group_id)
+                if name and group_id in self._groups:
+                    self._groups[group_id]["group_name"] = name
+                    await self._safe_update_group(group_id, group_name=name)
+                    logger.info("[cross_plague] 群 %s 名称补拉成功：%s", group_id, name)
+            except Exception as e:
+                logger.warning("[cross_plague] 群 %s 名称补拉失败: %s", group_id, e)
+            finally:
+                self._name_resolving.discard(group_id)
+
+        asyncio.create_task(_job())
 
     def _sync_group(self, group_id: str, **fields) -> None:
         """更新缓存 + 异步落库"""
@@ -311,8 +342,8 @@ class PlagueCore:
         tg = self._groups.get(to_group)
         if tg is None:
             return
-        src_name = (self._groups.get(from_group) or {}).get("group_name", from_group)
-        to_name = tg.get("group_name") or to_group
+        src_name = (self._groups.get(from_group) or {}).get("group_name") or "未知群"
+        to_name = tg.get("group_name") or "未知群"
 
         self._sync_group(
             to_group, status="infected", health=100, infected_at=now,
@@ -396,7 +427,7 @@ class PlagueCore:
         now = self._now()
         immunity_days = int(self._cfg("immunity_days", 7) or 7)
         g = self._groups.get(group_id)
-        group_name = (g or {}).get("group_name") or group_id
+        group_name = (g or {}).get("group_name") or "未知群"
         self._sync_group(
             group_id, status="cured", health=100, cured_at=now,
             antidote_progress=100, immunity_until=now + immunity_days * DAY,
@@ -531,7 +562,7 @@ class PlagueCore:
                 return "无感染群，事件空转"
             gid = random.choice(candidates)
             await self._add_progress(gid, "event", 20)
-            name = self._groups[gid].get("group_name") or gid
+            name = self._groups[gid].get("group_name") or "未知群"
             return f"{name} 解药进度 +20"
 
         if event_type == "群体免疫":
@@ -541,7 +572,7 @@ class PlagueCore:
                 return "无感染群，事件空转"
             gid = random.choice(candidates)
             await self._cure(gid, by_event=True)
-            name = self._groups[gid].get("group_name") or gid
+            name = self._groups[gid].get("group_name") or "未知群"
             return f"{name} 直接痊愈"
 
         if event_type == "封城":
@@ -554,7 +585,7 @@ class PlagueCore:
             dt = datetime.fromtimestamp(now)
             end_of_day = int(datetime(dt.year, dt.month, dt.day, 23, 59, 59).timestamp())
             self._sync_group(gid, quarantined_until=end_of_day)
-            name = self._groups[gid].get("group_name") or gid
+            name = self._groups[gid].get("group_name") or "未知群"
             return f"{name} 今日封城，暂停传播"
 
         if event_type == "谣言四起":
@@ -566,7 +597,7 @@ class PlagueCore:
                 return "无健康群，事件空转"
             gid = random.choice(candidates)
             self._sync_group(gid, is_false_alarm=1, false_alarm_at=now)
-            name = self._groups[gid].get("group_name") or gid
+            name = self._groups[gid].get("group_name") or "未知群"
             return f"{name} 被误判为感染（24 小时后自动解除）"
 
         return event_type

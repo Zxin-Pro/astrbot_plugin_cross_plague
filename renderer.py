@@ -175,7 +175,7 @@ def render_map(data: Dict[str, Any]) -> Optional[bytes]:
             y0 = header_h + 40 + r * cell_h
             color = _group_color(g)
             label = _group_label(g)
-            name = g.get("group_name") or g.get("group_id") or "?"
+            name = g.get("group_name") or "未知群"
             d.rounded_rectangle([x0, y0, x0 + cell_w - 24, y0 + cell_h - 30],
                                 radius=14, fill=PANEL, outline=BORDER, width=1)
             d.ellipse([x0 + 18, y0 + 22, x0 + 38, y0 + 42], fill=color)

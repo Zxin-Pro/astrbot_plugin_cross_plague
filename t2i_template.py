@@ -206,7 +206,7 @@ def build_world_tmpldata(world: dict, date_str: str) -> dict:
         if g.get("immunity_until") and g["immunity_until"] > _now():
             events.append("💙 免疫期")
         cards.append({
-            "name": g.get("group_name") or g.get("group_id") or "?",
+            "name": g.get("group_name") or "未知群",
             "count": f"{label} · 健康 {health}",
             "cls": cls, "events": events,
         })

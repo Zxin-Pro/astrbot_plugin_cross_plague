@@ -69,7 +69,7 @@ def _data_dir() -> str:
 
 @register("astrbot_plugin_cross_plague", "Zxin_Pro",
           "跨群瘟疫模拟游戏：感染随群友跨群发言传播，群友合作研发解药",
-          "v1.0.1",
+          "v1.0.2",
           "https://github.com/Zxin-Pro/astrbot_plugin_cross_plague")
 class CrossPlaguePlugin(Star):
     def __init__(self, context: Any, config: Any = None):
@@ -115,7 +115,8 @@ class CrossPlaguePlugin(Star):
         await self.db.init()
         self.textgen = TextGen(lambda: self._get_provider())
         self.core = PlagueCore(self.db, self._all_cfg(), self.textgen,
-                               self._send_text_to_group)
+                               self._send_text_to_group,
+                               fetch_name=self._fetch_group_name_api)
         await self.core.load()
         self._running = True
         self._sched_task = asyncio.create_task(self._scheduler_loop())
@@ -283,6 +284,9 @@ class CrossPlaguePlugin(Star):
             if not group_id or not user_id:
                 return
             group_name = self._get_group_name(event)
+            if not group_name:
+                # 事件没带群名 → OneBot get_group_info 主动拉取
+                group_name = await self._fetch_group_name_api(group_id)
             await self.core.on_group_message(group_id, user_id, group_name)
         except Exception as e:
             logger.error(f"[cross_plague] 群消息处理异常: {e}")
@@ -323,6 +327,41 @@ class CrossPlaguePlugin(Star):
                     return str(v)
             except Exception:
                 pass
+        return ""
+
+    def _find_cqhttp_client(self):
+        """遍历平台实例找 aiocqhttp 客户端（支持 OneBot API 调用）"""
+        try:
+            for inst in self.context.platform_manager.get_insts():
+                try:
+                    meta_name = inst.meta().name or ""
+                except Exception:
+                    meta_name = ""
+                if "aiocqhttp" not in meta_name:
+                    continue
+                for attr in ("bot", "client"):
+                    c = getattr(inst, attr, None)
+                    if c is not None and hasattr(c, "call_action"):
+                        return c
+        except Exception:
+            pass
+        return None
+
+    async def _fetch_group_name_api(self, group_id: str) -> str:
+        """通过 OneBot get_group_info 接口主动获取群名（事件拿不到时的兜底）"""
+        try:
+            client = self._find_cqhttp_client()
+            if client is None:
+                return ""
+            info = await asyncio.wait_for(
+                client.call_action("get_group_info", group_id=int(group_id)),
+                timeout=10,
+            )
+            if isinstance(info, dict):
+                return str(info.get("group_name") or "")
+        except Exception as e:
+            logger.debug("[cross_plague] get_group_info 获取群名失败 %s: %s",
+                         group_id, e)
         return ""
 
     # ================= 通用辅助 =================
@@ -383,7 +422,7 @@ class CrossPlaguePlugin(Star):
             return
 
         text = (
-            f"🏥 {g.get('group_name') or group_id} 疫情卡片\n"
+            f"🏥 {g.get('group_name') or '未知群'} 疫情卡片\n"
             f"状态：{data['label']}\n"
             f"健康值：{g.get('health') if g.get('health') is not None else 100}/100\n"
             f"解药进度：{min(g.get('antidote_progress') or 0, 100)}/100\n"
@@ -408,7 +447,7 @@ class CrossPlaguePlugin(Star):
 
         state = await self.db.get_state()
         card = {
-            "group_name": g.get("group_name") or group_id,
+            "group_name": g.get("group_name") or "未知群",
             "label": data["label"], "status": g.get("status") or "healthy",
             "health": g.get("health") or 0,
             "progress": g.get("antidote_progress") or 0,
@@ -445,7 +484,7 @@ class CrossPlaguePlugin(Star):
             "current_event": data["current_event"],
             "counts": c, "new_today": data["new_today"],
             "groups": [
-                {**g, "group_name": g.get("group_name") or gid}
+                {**g, "group_name": g.get("group_name") or "未知群"}
                 for gid, g in list(self.core._groups.items())[:32]
             ],
         }
@@ -513,7 +552,7 @@ class CrossPlaguePlugin(Star):
         if fc:
             for i, r in enumerate(fc[:5]):
                 dur = (r.get("duration") or 0)
-                text += (f"{i + 1}. {r.get('group_name') or r['group_id']}"
+                text += (f"{i + 1}. {r.get('group_name') or '未知群'}"
                          f"：{_fmt_duration_(dur)}\n")
         else:
             text += "暂无痊愈群\n"
@@ -524,7 +563,7 @@ class CrossPlaguePlugin(Star):
             now = int(time.time())
             for i, r in enumerate(li[:5]):
                 dur = now - (r.get("infected_at") or now)
-                text += (f"{i + 1}. {r.get('group_name') or r['group_id']}"
+                text += (f"{i + 1}. {r.get('group_name') or '未知群'}"
                          f"：已感染 {_fmt_duration_(dur)}（健康 {r.get('health', 0)}）\n")
         else:
             text += "当前无感染群\n"
