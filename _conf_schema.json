@@ -1,0 +1,51 @@
+{
+  "auto_start_enabled": {
+    "type": "bool",
+    "default": true,
+    "description": "是否自动开始瘟疫（每日按 auto_start_time 随机投放零号病人）",
+    "hint": "关闭后仍可通过管理员指令 /瘟疫投放 手动开始"
+  },
+  "auto_start_time": {
+    "type": "string",
+    "default": "10:00",
+    "description": "每日零号病人投放时间（HH:MM）"
+  },
+  "daily_report_time": {
+    "type": "string",
+    "default": "21:00",
+    "description": "每日瘟疫日报推送时间（HH:MM）"
+  },
+  "push_target": {
+    "type": "string",
+    "default": "",
+    "description": "日报推送目标群号，多个用英文逗号分隔；留空则推送全部 7 天内活跃的群"
+  },
+  "spread_cooldown_hours": {
+    "type": "int",
+    "default": 1,
+    "description": "同一用户的跨群传播判定冷却时间（小时）",
+    "hint": "该用户在此时间内每条消息只做一次传播判定，避免刷屏刷概率"
+  },
+  "enable_super_spreader": {
+    "type": "bool",
+    "default": true,
+    "description": "是否启用超级传播者（每日随机 1 名用户，传播概率 90%，一次可感染 3 个群）"
+  },
+  "notify_daily_limit": {
+    "type": "int",
+    "default": 3,
+    "description": "同一群每日最多发送的瘟疫相关通知条数（感染/痊愈/事件）",
+    "hint": "防止刷屏；指令回复不受此限制"
+  },
+  "speaking_research_chance": {
+    "type": "int",
+    "default": 8,
+    "description": "感染群内每次发言随机贡献解药进度的概率（百分比，0-100）",
+    "hint": "对应'群友通过发言互动研发解药'的机制；贡献量 1 点，同样受每日 20 点上限约束"
+  },
+  "immunity_days": {
+    "type": "int",
+    "default": 7,
+    "description": "痊愈后的免疫期天数"
+  }
+}
